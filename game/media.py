@@ -5,21 +5,29 @@ class Note(object):
     def __init__(self):
         super().__init__()
 
+    @classmethod
+    def random(cls):
+        return cls()
+
 
 class Chord(object):
     def __init__(self):
         super().__init__()
 
+    @classmethod
+    def random(cls):
+        return cls()
+
 
 class Color(object):
-    def __init__(self, r=0, v=0, b=0):
+    def __init__(self, r=0, g=0, b=0):
         super().__init__()
         self.r = r
-        self.v = v
+        self.g = g
         self.b = b
 
     def __eq__(self, other):
-        if self.r == other.r and self.v == other.v and self.b == other.b:
+        if self.r == other.r and self.g == other.g and self.b == other.b:
             return True
         return False
 
