@@ -350,12 +350,26 @@ def update(game, inkey, elapsed_time):
         engine.key.LEFT: constants.LEFT,
         engine.key.RIGHT: constants.RIGHT,
     }
-    if inkey in dir_map:
+    if game.focus_index % 3 == 0 and inkey in dir_map:
         # wave_obj[game.wave_index % 2].play()
         # game.wave_index += 1
         game.move_player(dir_map[inkey], 1)
         if game.player_mode == "place":
             place_cell(game, ppos[0], ppos[1])
+    elif game.focus_index % 3 == 2:
+        if inkey == engine.key.UP or inkey == engine.key.LEFT:
+            game.cmds_focus_index -= 1
+        elif inkey == engine.key.DOWN or inkey == engine.key.RIGHT:
+            game.cmds_focus_index += 1
+        elif inkey == engine.key.ENTER or (
+            hasattr(inkey, "name") and inkey.name == "KEY_ENTER"
+        ):
+            if game.cmds_focus_index % 4 == 3:
+                game.stop()
+            elif game.cmds_focus_index % 4 == 0:
+                game.cmds_select_index = 0
+            elif game.cmds_focus_index % 4 == 1:
+                game.cmds_select_index = 1
     elif inkey == "q":
         game.stop()
     elif inkey == "1" or inkey == "2" or inkey == "3":
@@ -406,18 +420,21 @@ def update(game, inkey, elapsed_time):
     elif inkey == engine.key.F2:
         game.player_mode = "place"
         game.player.sprixel.fg_color = game.terminal.color_rgb(0, 255, 0)
-    elif inkey.name == "KEY_TAB":
-        game.current_board().ui_border_top = graphics.GREEN_SQUARE
-        game.current_board().ui_border_bottom = graphics.GREEN_SQUARE
-        game.current_board().ui_border_left = graphics.GREEN_SQUARE
-        game.current_board().ui_border_right = graphics.GREEN_SQUARE
+    # We must always catch the TAB
+    if inkey.name == "KEY_TAB":
+        game.focus_index += 1
 
     # Now update life
     update_life(game, elapsed_time)
 
     # Then display stuff
     redraw_screen(game)
-    game.screen.display_line(f"FPS: {1/elapsed_time:2.2f}")
+    # game.screen.display_line(f"FPS: {1/elapsed_time:2.2f}")
+
+    # Cleanup
+    if game.cleanup_timer > 5.0:
+        clean_up(game)
+        game.cleanup_timer = 0
 
     # for npc in game.life_pool:
     #     game.screen.display_line(
@@ -425,24 +442,97 @@ def update(game, inkey, elapsed_time):
     #     )
 
 
+def draw_box(game, row, column, height, width, selected=False):
+    color = ""
+    end_color = ""
+    scr = game.screen
+    if selected:
+        color = base.Fore.GREEN + base.Style.BRIGHT
+        end_color = base.Style.RESET_ALL
+    scr.display_at(
+        f"{color}{graphics.BoxDrawings.LIGHT_ARC_DOWN_AND_RIGHT}"
+        f"{graphics.BoxDrawings.LIGHT_HORIZONTAL*(width-2)}"
+        f"{graphics.BoxDrawings.LIGHT_ARC_DOWN_AND_LEFT}{end_color}",
+        row,
+        column,
+    )
+    for r in range(1, height - 1):
+        scr.display_at(
+            f"{color}{graphics.BoxDrawings.LIGHT_VERTICAL}{end_color}", row + r, column
+        )
+        scr.display_at(
+            f"{color}{graphics.BoxDrawings.LIGHT_VERTICAL}{end_color}",
+            row + r,
+            column + width - 1,
+        )
+        scr.display_at(
+            f"{color}{graphics.BoxDrawings.LIGHT_ARC_UP_AND_RIGHT}"
+            f"{graphics.BoxDrawings.LIGHT_HORIZONTAL*(width-2)}"
+            f"{graphics.BoxDrawings.LIGHT_ARC_UP_AND_LEFT}{end_color}",
+            row + height - 1,
+            column,
+        )
+
+
 def redraw_screen(game):
-    game.screen.display_line(f"Mode: {game.player_mode}")
+    scr = game.screen
+    scr.display_line(
+        f"Mode: {'ENCODE' if game.cmds_select_index==0 else 'RUN'}      Population: {len(game.life_pool)}   Screen: ({scr.width},{scr.height})"
+    )
+    if game.focus_index % 3 == 0:
+        game.current_board().ui_border_top = graphics.GREEN_SQUARE
+        game.current_board().ui_border_bottom = graphics.GREEN_SQUARE
+        game.current_board().ui_border_left = graphics.GREEN_SQUARE
+        game.current_board().ui_border_right = graphics.GREEN_SQUARE
+    else:
+        game.current_board().ui_border_top = graphics.WHITE_SQUARE
+        game.current_board().ui_border_bottom = graphics.WHITE_SQUARE
+        game.current_board().ui_border_left = graphics.WHITE_SQUARE
+        game.current_board().ui_border_right = graphics.WHITE_SQUARE
     game.display_board()
-    game.screen.display_line(
-        f"Cell: {game.available_cells[game.cell_index % len(game.available_cells)]}"
+    # scr.display_line(
+    #     f"Cell: {game.available_cells[game.cell_index % len(game.available_cells)]}"
+    # )
+
+    # Game UI
+    # focus: 0->map, 1->cells, 2-> cmd
+    draw_box(
+        game, 2, game.current_board().width * 2 + 6, 20, 14, game.focus_index % 3 == 1,
     )
-    game.screen.display_line(f"Population: {len(game.life_pool)}")
-    print(
-        f"vp:  {game.partial_display_viewport} gpos: {game.player.pos} #movables: {len(game.current_board().get_movables())}"
+    draw_box(
+        game, 22, game.current_board().width * 2 + 6, 12, 14, game.focus_index % 3 == 2,
     )
-    if game.cleanup_timer > 5.0:
-        clean_up(game)
-        game.cleanup_timer = 0
+    color = f"{base.Style.BRIGHT}{base.Fore.WHITE}{base.Back.GREEN}"
+    end_color = f"{base.Style.RESET_ALL}"
+    scr.display_at(
+        f"{color if game.cmds_focus_index%4 == 0 else ''}ENCODE{end_color if game.cmds_focus_index%4 == 0 else ''}",
+        24,
+        game.current_board().width * 2 + 10,
+    )
+    scr.display_at(
+        f"{color if game.cmds_focus_index%4 == 1 else ''}RUN{end_color if game.cmds_focus_index%4 == 1 else ''}",
+        26,
+        game.current_board().width * 2 + 11,
+    )
+    scr.display_at(
+        f"{color if game.cmds_focus_index%4 == 2 else ''}RESET{end_color if game.cmds_focus_index%4 == 2 else ''}",
+        28,
+        game.current_board().width * 2 + 10,
+    )
+    scr.display_at(
+        f"{color if game.cmds_focus_index%4 == 3 else ''}QUIT{end_color if game.cmds_focus_index%4 == 3 else ''}",
+        30,
+        game.current_board().width * 2 + 11,
+    )
+    # Debug
+    # print(
+    #     f"vp:  {game.partial_display_viewport} gpos: {game.player.pos} #movables: {len(game.current_board().get_movables())}"
+    # )
     # for r in range(0, b.height):
     #     for c in range(0, b.width):
     #         i = b.item(r, c)
     #         if isinstance(i, life.Organism):
-    #             game.screen.display_line(
+    #             scr.display_line(
     #                 f"{i} {type(i)} {i.lifespan} {i not in game.life_pool}"
     #             )
 
@@ -479,6 +569,10 @@ o.actuator = actuators.RandomActuator(moveset=[constants.RIGHT])
 game.available_cells.append(o)
 game.current_generation = {}
 game.cell_index = 0
+game.focus_index = 0
+game.cells_focus_index = 0
+game.cmds_focus_index = 0
+game.cmds_select_index = 0
 game.enable_partial_display = False
 game.partial_display_viewport = [
     int((game.screen.width) / 2),
@@ -499,6 +593,23 @@ b.place_item(gene, 5, 10)
 
 game.add_board(1, b)
 game.change_level(1)
+
+k = ""
+while game.screen.width < 145 or game.screen.height < 42:
+    game.clear_screen()
+    if k == "q":
+        game.stop()
+        break
+    print(
+        base.Text.red_bright(
+            f"This simulation requires a terminal size of 145 columns and 42 lines.\n"
+            f"Your current terminal size is {game.screen.width} (columns) by"
+            f" {game.screen.height} (rows).\n\n"
+            "Please resize your terminal and press any key.\n\n"
+            "To quit press 'q'.\n\n"
+        )
+    )
+    k = game.get_key()
 
 while game.state != constants.STOPPED:
     if game.current_state == "title_screen":
