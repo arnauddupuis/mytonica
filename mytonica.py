@@ -238,7 +238,7 @@ def tuto_update(game, inkey, elapsed_time):
             "During the real simulations the traits of the selected cell is going to be displayed here.\n"
             f"If you think that your simulation is not worth keeping you can {base.Text.green_bright('RESET')} the simulation.\n"
             "Cell evolve and mutate, giving you the opportunity to gain more material. Hopefully new colors and complex cords are going to emerge!\n"
-            "At each stage you will get more cells (but never more than 12, new ones replacing the old ones).\n"
+            "At each stage you will get more cells (but never more than 24, new ones replacing the old ones).\n"
             "Your simulation is going to be graded based on your efficiency. Do not disappoint us MLC!\n"
             f"One last thing: be careful, not every program is sold to that '{base.Text.green('life')}' thing... You might encounter resistance and sabotage..."
         )
@@ -274,7 +274,6 @@ def goto_level(game, lvl_number):
         gene = life.GeneticMaterial(action=pickup, action_parameters=[game])
         gene.action_parameters.append(gene)
         lvl.board.place_item(gene, p[0], p[1])
-        lvl.board._immovables.add(gene)
 
     game.change_level(lvl.number)
     game.user_update = update
@@ -323,7 +322,7 @@ def update_life(game, elapsed_time):
                         del game.life_pool[idx]
                 # Funny stuff
                 min_dt = 1.0
-                # TODO: change this to look for potential partners and select the best.
+                i = None
                 for p in [
                     base.Vector2D.from_direction(constants.UP, 1),
                     base.Vector2D.from_direction(constants.DOWN, 1),
@@ -339,60 +338,85 @@ def update_life(game, elapsed_time):
                         or nc >= game.current_board().width
                     ):
                         continue
-                    i = game.current_board().item(nr, nc)
-                    # if (
-                    #     not isinstance(i, board_items.BoardItemVoid)
-                    #     and not isinstance(i, board_items.Player)
-                    #     and not isinstance(i, life.GeneticMaterial)
-                    # ):
-                    # print(
-                    #     f"Found a potential partner: {i} (self: {i == npc}) (time: {abs(i.timestamp - npc.timestamp)} {abs(i.timestamp - npc.timestamp) >= min_dt})"
-                    # )
-                    if (
-                        isinstance(i, life.Organism)
-                        and i != npc
-                        and abs(i.timestamp - npc.timestamp) >= min_dt
+                    tmp_i = game.current_board().item(nr, nc)
+                    if isinstance(tmp_i, life.Organism) and isinstance(
+                        i, life.Organism
                     ):
-                        # print("Making baby with someone else!")
-                        baby = npc.reproduce(i)
-                        # tmp
-                        baby.actuator = actuators.RandomActuator(
-                            moveset=[
-                                constants.UP,
-                                constants.DOWN,
-                                constants.LEFT,
-                                constants.RIGHT,
-                            ]
-                        )
-                        done = False
-                        # yummy... I'll fix that later...
-                        if baby is not None:
-                            for o in [npc, i]:
-                                for dr in range(-1, 2, 1):
-                                    for dc in range(-1, 2, 1):
-                                        nr = o.row + dr
-                                        nc = o.column + dc
-                                        if (
-                                            nr >= 0
-                                            and nr < game.current_board().height
-                                            and nc >= 0
-                                            and nc < game.current_board().width
-                                            and isinstance(
-                                                game.current_board().item(nr, nc),
-                                                board_items.BoardItemVoid,
-                                            )
-                                        ):
-                                            game.life_pool.append(baby)
-                                            game.current_board().place_item(
-                                                baby, nr, nc
-                                            )
-                                            done = True
-                                            break
-                                    if done:
+                        # Bad but emergency
+                        if i.target is None:
+                            cd = 999999999999
+                            for tmp_g in game.current_board().get_immovables(
+                                type="genetic_material"
+                            ):
+                                d = i.distance_to(tmp_g)
+                                if d < cd:
+                                    i.target = tmp_g
+                                    cd = d
+                        if tmp_i.target is None:
+                            cd = 999999999999
+                            for tmp_g in game.current_board().get_immovables(
+                                type="genetic_material"
+                            ):
+                                d = tmp_i.distance_to(tmp_g)
+                                if d < cd:
+                                    tmp_i.target = tmp_g
+                                    cd = d
+                    if isinstance(tmp_i, life.Organism) and i is None:
+                        i = tmp_i
+                    elif (
+                        isinstance(tmp_i, life.Organism)
+                        and i is not None
+                        and isinstance(i, life.Organism)
+                        and i.fitness() < tmp_i.fitness()
+                    ):
+                        i = tmp_i
+
+                if (
+                    isinstance(i, life.Organism)
+                    and i != npc
+                    and abs(i.timestamp - npc.timestamp) >= min_dt
+                ):
+                    # print("Making baby with someone else!")
+                    baby = npc.reproduce(i)
+                    # tmp
+                    baby.actuator = actuators.RandomActuator(
+                        moveset=[
+                            constants.UP,
+                            constants.DOWN,
+                            constants.LEFT,
+                            constants.RIGHT,
+                        ]
+                    )
+                    done = False
+                    # yummy... I'll fix that later...
+                    if baby is not None:
+                        for o in [npc, i]:
+                            for dr in range(-1, 2, 1):
+                                for dc in range(-1, 2, 1):
+                                    nr = o.row + dr
+                                    nc = o.column + dc
+                                    if (
+                                        nr >= 0
+                                        and nr < game.current_board().height
+                                        and nc >= 0
+                                        and nc < game.current_board().width
+                                        and isinstance(
+                                            game.current_board().item(nr, nc),
+                                            board_items.BoardItemVoid,
+                                        )
+                                    ):
+                                        # give the baby a chance to be original
+                                        baby.mutate()
+                                        # baby.birth()
+                                        game.life_pool.append(baby)
+                                        game.current_board().place_item(baby, nr, nc)
+                                        done = True
                                         break
                                 if done:
                                     break
-                        break
+                            if done:
+                                break
+                    # break
                 if trigger_cleanup:
                     clean_up(game)
                     game.cleanup_timer = 0
@@ -442,6 +466,12 @@ def place_cell(game, row, column):
     game.current_board().place_item(
         o, row, column,
     )
+    cd = 999999999999
+    for i in game.current_board().get_immovables(type="genetic_material"):
+        d = o.distance_to(i)
+        if d < cd:
+            o.target = i
+            cd = d
     game.life_pool.append(o)
 
 
@@ -544,7 +574,10 @@ def update(game, inkey, elapsed_time):
         == game.lvl_object.winning_condition
         and game.cmds_select_index == 1
     ):
-        if game.current_level < 1:
+        game.score += (
+            (game.lvl_object.allowed_cells - game.used_cells) * 5 * game.current_level
+        )
+        if game.current_level < levels.Level.max_level():
             goto_level(game, game.current_level + 1)
         else:
             game.clear_screen()
@@ -623,7 +656,6 @@ def redraw_screen(game):
     scr = game.screen
     scr.display_line(
         f"Difficulty: {game.lvl_object.difficulty}   Population: {len(game.life_pool)}   Remaining cells: {game.lvl_object.allowed_cells - game.used_cells}   Score: {game.score}"
-        f"   organism: {len(game.current_board().get_immovables(type='organism'))} gm: {len(game.current_board().get_immovables(type='genetic_material'))}"
     )
     if game.focus_index % 3 == 0:
         game.current_board().ui_border_top = graphics.GREEN_SQUARE
@@ -735,6 +767,10 @@ def pickup(params):
     o.actuator = actuators.RandomActuator(moveset=gene.directions)
     o.actuator.pause()
     game.available_cells.append(o)
+    game.score += 50
+    if len(game.available_cells) > 24:
+        game.available_cells = game.available_cells[len(game.available_cells) - 24 :]
+    game.current_board().remove_item(gene)
 
 
 game = engine.Game(
@@ -748,24 +784,36 @@ game.player = board_items.Player(
 )
 game.wave_index = 0
 game.available_cells = []
-o = life.Organism(cells=[life.Cell(multi_color=False, color1=media.Color(255, 0, 0))])
+o = life.Organism(
+    cells=[life.Cell(multi_color=False, color1=media.Color(255, 0, 0))],
+    note=media.Note("C"),
+)
 o.actuator = actuators.RandomActuator(moveset=[constants.UP])
 o.actuator.pause()
 game.available_cells.append(o)
-o = life.Organism(cells=[life.Cell(multi_color=False, color1=media.Color(0, 255, 0))])
+o = life.Organism(
+    cells=[life.Cell(multi_color=False, color1=media.Color(0, 255, 0))],
+    note=media.Note("D"),
+)
 o.actuator = actuators.RandomActuator(moveset=[constants.DOWN])
 o.actuator.pause()
 game.available_cells.append(o)
-o = life.Organism(cells=[life.Cell(multi_color=False, color1=media.Color(0, 0, 255))])
+o = life.Organism(
+    cells=[life.Cell(multi_color=False, color1=media.Color(0, 0, 255))],
+    note=media.Note("E"),
+)
 o.actuator = actuators.RandomActuator(moveset=[constants.LEFT])
 o.actuator.pause()
 game.available_cells.append(o)
 o = life.Organism(
     cells=[life.Cell(multi_color=False, color1=media.Color(255, 0, 255))],
+    note=media.Note("F"),
 )
 o.actuator = actuators.RandomActuator(moveset=[constants.RIGHT])
 o.actuator.pause()
 game.available_cells.append(o)
+
+
 game.enable_partial_display = False
 game.current_state = "title_screen"
 game.cleanup_timer = 0

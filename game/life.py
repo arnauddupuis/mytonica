@@ -1,7 +1,7 @@
 import random
 from pygamelib.assets import graphics
 from pygamelib.gfx import core
-from pygamelib import board_items, constants
+from pygamelib import board_items, constants, actuators, base
 from blessed import Terminal
 from game import media
 import time
@@ -28,17 +28,19 @@ class Cell(board_items.BoardItemComplexComponent):
         self.sprixel.bg_color = terminal.on_color_rgb(
             self.colors[0].r, self.colors[0].g, self.colors[0].b
         )
+        self.__blocks = None
         if self.multi_color:
-            self.__blocks = list()
-            for n in dir(graphics.Blocks):
-                if n.startswith("__"):
-                    continue
-                self.__blocks.append(graphics.Blocks.__dict__[n])
+            # self.__blocks = list()
+            # for n in dir(graphics.Blocks):
+            #     if n.startswith("__"):
+            #         continue
+            #     self.__blocks.append(graphics.Blocks.__dict__[n])
             if "color2" in kwargs and isinstance(kwargs["color2"], media.Color):
                 self.colors.append(kwargs["color2"])
             else:
                 self.colors.append(self.colors.append(media.Color.random()))
-            self.sprixel.model = random.choice(self.__blocks) * 2
+            # self.sprixel.model = random.choice(self.__blocks) * 2
+            self.sprixel.model = self.get_random_block()
             self.sprixel.fg_color = terminal.color_rgb(
                 self.colors[1].r, self.colors[1].g, self.colors[1].b
             )
@@ -47,9 +49,20 @@ class Cell(board_items.BoardItemComplexComponent):
         if isinstance(color, media.Color):
             self.colors[idx] = color
 
+    def get_random_block(self):
+        if self.__blocks is None:
+            self.__blocks = list()
+            for n in dir(graphics.Blocks):
+                if n.startswith("__"):
+                    continue
+                self.__blocks.append(graphics.Blocks.__dict__[n])
+        return random.choice(self.__blocks) * 2
+
 
 class Organism(board_items.ComplexNPC):
     mutation_rate = 0.1
+    base_lifespan = 5
+    base_lifespan_variation = 0.25
 
     def __init__(self, **kwargs):
         self.cells = list()
@@ -74,20 +87,32 @@ class Organism(board_items.ComplexNPC):
         self.gen = 0
         if "gen" in kwargs and type(kwargs["gen"]) is int:
             self.gen = kwargs["gen"]
-        self.lifespan = 5
+        self.lifespan = random.randint(
+            round(
+                Organism.base_lifespan
+                - Organism.base_lifespan * Organism.base_lifespan_variation
+            ),
+            round(
+                Organism.base_lifespan
+                + Organism.base_lifespan * Organism.base_lifespan_variation
+            ),
+        )
         if "lifespan" in kwargs and type(kwargs["lifespan"]) is int:
             self.lifespan = kwargs["lifespan"]
         self.initial_lifespan = self.lifespan
-        self.note = media.Note()
+        self.note = None
         if "note" in kwargs and isinstance(kwargs["note"], media.Note):
             self.note = kwargs["note"]
-        self.chord = media.Chord()
+        self.chord = None
         if "chord" in kwargs and isinstance(kwargs["chord"], media.Chord):
             self.chord = kwargs["chord"]
         self.starting_position = [0, 0]
         if "starting_position" in kwargs and type(kwargs["starting_position"]) is int:
             self.starting_position = kwargs["starting_position"]
-
+        # target is an item
+        self.target = None
+        if "target" in kwargs and type(kwargs["target"]) is int:
+            self.target = kwargs["target"]
         self.timestamp = time.time()
 
     def reproduce(self, other=None):
@@ -172,9 +197,122 @@ class Organism(board_items.ComplexNPC):
                     size=[new_width, new_height],
                     cells=[Cell(multi_color=False, color1=c)],
                 )
+                new.actuator = actuators.RandomActuator(
+                    moveset=self.actuator.moveset[
+                        0 : round(len(self.actuator.moveset) / 2)
+                    ]
+                    + other.actuator.moveset[round(len(other.actuator.moveset) / 2) :]
+                )
+                # if self.chord is not None or other.chord is not None:
+                #     if self.chord is not None:
+                #         new.chord = media.Chord(self.chord.name)
+                #     else:
+                #         new.chord = media.Chord(other.chord.name)
+                # elif self.note is not None or other.note is not None:
+                #     if self.note is not None:
+                #         new.note = media.Note(self.note.name)
+                #     else:
+                #         new.note = media.Note(other.note.name)
                 return new
 
     def mutate(self):
+        if random.random() <= Organism.mutation_rate:
+            ch = random.choice([1, 2, 3, 4])
+            if ch == 1:
+                # color
+                mut = random.choice([True, False])
+                if mut:
+                    if self.cells[0].multi_color:
+                        self.cells[0].colors[
+                            random.randrange(0, len(self.cells[0].colors))
+                        ] = media.Color.random()
+                    else:
+                        self.cells[0].multi_color = True
+                        self.cells[0].sprixel.model = self.cells[0].get_random_block()
+                        c = media.Color.random()
+                        if len(self.cells[0].colors) > 1:
+                            self.cells[0].colors[1] = c
+                        else:
+                            self.cells[0].colors.append(c)
+
+            elif ch == 2:
+                # note/chord
+                if self.note is None:
+                    self.note = media.Note.random()
+                else:
+                    self.chord = media.Chord.random()
+            elif ch == 3:
+                # moveset
+                directions = [
+                    constants.UP,
+                    constants.DOWN,
+                    constants.LEFT,
+                    constants.RIGHT,
+                    constants.DLDOWN,
+                    constants.DLUP,
+                    constants.DRDOWN,
+                    constants.DRUP,
+                ]
+                dirs = list()
+                for _ in range(0, random.randint(0, 5)):
+                    dirs.append(random.choice(directions))
+                self.actuator.moveset = self.actuator.moveset + dirs
+            elif ch == 4:
+                icurrent = self.initial_lifespan
+                self.initial_lifespan += random.randint(
+                    round(self.initial_lifespan * Organism.base_lifespan_variation),
+                    round(self.initial_lifespan * Organism.base_lifespan_variation) * 2,
+                )
+                self.lifespan += self.initial_lifespan - icurrent
+
+    def fitness(self):
+        mc = 0
+        if self.cells[0].multi_color:
+            mc = 1
+        music = 0
+        if self.note is not None:
+            music = 50
+        if self.chord is not None:
+            music = 150
+        # score = 0
+        return (
+            len(self.actuator.moveset) * 5
+            + (
+                base.Math.distance(
+                    self.starting_position[0],
+                    self.starting_position[1],
+                    self.target.pos[0],
+                    self.target.pos[1],
+                )
+                - self.distance_to(self.target)
+            )
+            * 100
+            + 50 * mc
+            + music
+            + self.initial_lifespan * 20
+        )
+        # score += len(self.actuator.moveset) * 5
+        # score += (
+        #     base.Math.distance(
+        #         self.starting_position[0],
+        #         self.starting_position[1],
+        #         self.target.pos[0],
+        #         self.target.pos[1],
+        #     )
+        #     - self.distance_to(self.target)
+        # ) * 100
+        # score += 50 * mc
+        # score += music
+        # score += self.initial_lifespan * 20
+        # return score
+
+    def birth(self):
+        if self.chord is not None:
+            self.chord.play()
+        elif self.note is not None:
+            self.note.play()
+
+    def death(self):
         pass
 
 

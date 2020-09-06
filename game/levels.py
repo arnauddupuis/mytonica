@@ -4,7 +4,7 @@ class Level(object):
             "map": "maps/tutorial.json",
             "allowed_cells": 50,
             "difficulty": "easy",
-            "winning_condition": 2,
+            "winning_condition": 0,
             "number": 0,
             "state": 0,
         },
@@ -14,6 +14,14 @@ class Level(object):
             "difficulty": "easy",
             "winning_condition": 0,
             "number": 1,
+            "state": 0,
+        },
+        2: {
+            "map": "maps/lvl_02.json",
+            "allowed_cells": 50,
+            "difficulty": "easy",
+            "winning_condition": 0,
+            "number": 2,
             "state": 0,
         },
     }
@@ -28,3 +36,7 @@ class Level(object):
             self.number = Level.data[lvl]["number"]
             self.state = Level.data[lvl]["state"]
             self.board = None
+
+    @staticmethod
+    def max_level():
+        return max(Level.data.keys())
