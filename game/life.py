@@ -43,9 +43,9 @@ class Cell(board_items.BoardItemComplexComponent):
                 self.colors[1].r, self.colors[1].g, self.colors[1].b
             )
 
-    def set_color(self, color):
+    def set_color(self, color, idx=0):
         if isinstance(color, media.Color):
-            self.colors[0] = color
+            self.colors[idx] = color
 
 
 class Organism(board_items.ComplexNPC):
@@ -78,9 +78,16 @@ class Organism(board_items.ComplexNPC):
         if "lifespan" in kwargs and type(kwargs["lifespan"]) is int:
             self.lifespan = kwargs["lifespan"]
         self.initial_lifespan = self.lifespan
+        self.note = media.Note()
+        if "note" in kwargs and isinstance(kwargs["note"], media.Note):
+            self.note = kwargs["note"]
+        self.chord = media.Chord()
+        if "chord" in kwargs and isinstance(kwargs["chord"], media.Chord):
+            self.chord = kwargs["chord"]
         self.starting_position = [0, 0]
         if "starting_position" in kwargs and type(kwargs["starting_position"]) is int:
             self.starting_position = kwargs["starting_position"]
+
         self.timestamp = time.time()
 
     def reproduce(self, other=None):
@@ -104,43 +111,68 @@ class Organism(board_items.ComplexNPC):
             # We'll treat each cell as a "gene"
             c = media.Color(0, 0, 0)
             mix = random.random()
-            for elt in ["r", "g", "b"]:
-                # Organisms can take either the genome of parent 1 or parent 2 or a
-                # blending of them. They have 40% chance to take a gradient from one or
-                # the other parent and 60% chance to be a mix (20% perfect mix, 20%
-                # closer to parent 1 and 20% closer to parent 2).
-
-                if mix <= 0.2:
-                    c.__setattr__(elt, self.cells[0].colors[0].__getattribute__(elt))
-                elif mix <= 0.4:
-                    c.__setattr__(elt, other.cells[0].colors[0].__getattribute__(elt))
-                else:
-                    distance = 1
-                    factor = 1
-                    if mix <= 0.6:
-                        # perfect mix
-                        distance = 2
-                    elif mix <= 0.8:
-                        # closer to self
-                        distance = 3
+            mc = False
+            if mix > 0.4 and mix <= 0.6 and not self.cells[0].multi_color:
+                mc = random.choice([True, False])
+            if mc:
+                c1 = media.Color(
+                    self.cells[0].colors[0].r,
+                    self.cells[0].colors[0].g,
+                    self.cells[0].colors[0].b,
+                )
+                c2 = media.Color(
+                    other.cells[0].colors[0].r,
+                    other.cells[0].colors[0].g,
+                    other.cells[0].colors[0].b,
+                )
+                new = Organism(
+                    size=[new_width, new_height],
+                    cells=[Cell(multi_color=mc, color1=c1, color2=c2)],
+                )
+                return new
+            else:
+                for elt in ["r", "g", "b"]:
+                    # Organisms can take either the genome of parent 1 or parent 2 or a
+                    # blending of them. They have 40% chance to take a gradient from one or
+                    # the other parent and 60% chance to be a mix (20% perfect mix, 20%
+                    # closer to parent 1 and 20% closer to parent 2).
+                    mc = False
+                    if mix <= 0.2:
+                        c.__setattr__(
+                            elt, self.cells[0].colors[0].__getattribute__(elt)
+                        )
+                    elif mix <= 0.4:
+                        c.__setattr__(
+                            elt, other.cells[0].colors[0].__getattribute__(elt)
+                        )
                     else:
-                        # closer to other
-                        factor = 2
-                        distance = 3
-                    c.__setattr__(
-                        elt,
-                        round(
-                            (
-                                self.cells[0].colors[0].__getattribute__(elt)
-                                + other.cells[0].colors[0].__getattribute__(elt)
-                            )
-                            * (factor / distance)
-                        ),
-                    )
-            new = Organism(
-                size=[new_width, new_height], cells=[Cell(multi_color=False, color1=c)],
-            )
-            return new
+                        distance = 1
+                        factor = 1
+                        if mix <= 0.6:
+                            # perfect mix
+                            distance = 2
+                        elif mix <= 0.8:
+                            # closer to self
+                            distance = 3
+                        else:
+                            # closer to other
+                            factor = 2
+                            distance = 3
+                        c.__setattr__(
+                            elt,
+                            round(
+                                (
+                                    self.cells[0].colors[0].__getattribute__(elt)
+                                    + other.cells[0].colors[0].__getattribute__(elt)
+                                )
+                                * (factor / distance)
+                            ),
+                        )
+                new = Organism(
+                    size=[new_width, new_height],
+                    cells=[Cell(multi_color=False, color1=c)],
+                )
+                return new
 
     def mutate(self):
         pass
@@ -154,7 +186,11 @@ class GeneticMaterial(board_items.GenericActionableStructure):
 
     def __init__(self, **kwargs):
         kwargs["perm"] = constants.NPC_AUTHORIZED
+        if "type" not in kwargs:
+            kwargs["type"] = "genetic_material"
         super().__init__(**kwargs)
+        self.set_overlappable(True)
+        self.set_restorable(False)
         self.color = media.Color.random()
         if "color" in kwargs and isinstance(kwargs["color"], media.Color):
             self.color = kwargs["color"]
@@ -188,3 +224,7 @@ class GeneticMaterial(board_items.GenericActionableStructure):
                 fg_color=terminal.color_rgb(self.color.r, self.color.g, self.color.b),
                 is_bg_transparent=True,
             )
+
+    @classmethod
+    def random(cls):
+        return GeneticMaterial()

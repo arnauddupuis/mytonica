@@ -5,6 +5,12 @@ class Note(object):
     def __init__(self):
         super().__init__()
 
+    def __repr__(self):
+        return "A"
+
+    def __str__(self):
+        return self.__repr__()
+
     @classmethod
     def random(cls):
         return cls()
@@ -13,6 +19,12 @@ class Note(object):
 class Chord(object):
     def __init__(self):
         super().__init__()
+
+    def __repr__(self):
+        return "CEG"
+
+    def __str__(self):
+        return self.__repr__()
 
     @classmethod
     def random(cls):
