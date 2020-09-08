@@ -236,11 +236,12 @@ class Organism(board_items.ComplexNPC):
                             self.cells[0].colors.append(c)
 
             elif ch == 2:
+                pass
                 # note/chord
-                if self.note is None:
-                    self.note = media.Note.random()
-                else:
-                    self.chord = media.Chord.random()
+                # if self.note is None:
+                #     self.note = media.Note.random()
+                # else:
+                #     self.chord = media.Chord.random()
             elif ch == 3:
                 # moveset
                 directions = [
@@ -274,7 +275,7 @@ class Organism(board_items.ComplexNPC):
             music = 50
         if self.chord is not None:
             music = 150
-        # score = 0
+        score = 0
         return (
             len(self.actuator.moveset) * 5
             + (
@@ -291,20 +292,21 @@ class Organism(board_items.ComplexNPC):
             + music
             + self.initial_lifespan * 20
         )
-        # score += len(self.actuator.moveset) * 5
-        # score += (
-        #     base.Math.distance(
-        #         self.starting_position[0],
-        #         self.starting_position[1],
-        #         self.target.pos[0],
-        #         self.target.pos[1],
-        #     )
-        #     - self.distance_to(self.target)
-        # ) * 100
-        # score += 50 * mc
-        # score += music
-        # score += self.initial_lifespan * 20
-        # return score
+        score += len(self.actuator.moveset) * 5
+        if self.target is not None:
+            score += (
+                base.Math.distance(
+                    self.starting_position[0],
+                    self.starting_position[1],
+                    self.target.pos[0],
+                    self.target.pos[1],
+                )
+                - self.distance_to(self.target)
+            ) * 100
+        score += 50 * mc
+        score += music
+        score += self.initial_lifespan * 20
+        return score
 
     def birth(self):
         if self.chord is not None:
