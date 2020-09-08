@@ -276,22 +276,22 @@ class Organism(board_items.ComplexNPC):
         if self.chord is not None:
             music = 150
         score = 0
-        return (
-            len(self.actuator.moveset) * 5
-            + (
-                base.Math.distance(
-                    self.starting_position[0],
-                    self.starting_position[1],
-                    self.target.pos[0],
-                    self.target.pos[1],
-                )
-                - self.distance_to(self.target)
-            )
-            * 100
-            + 50 * mc
-            + music
-            + self.initial_lifespan * 20
-        )
+        # return (
+        #     len(self.actuator.moveset) * 5
+        #     + (
+        #         base.Math.distance(
+        #             self.starting_position[0],
+        #             self.starting_position[1],
+        #             self.target.pos[0],
+        #             self.target.pos[1],
+        #         )
+        #         - self.distance_to(self.target)
+        #     )
+        #     * 100
+        #     + 50 * mc
+        #     + music
+        #     + self.initial_lifespan * 20
+        # )
         score += len(self.actuator.moveset) * 5
         if self.target is not None:
             score += (
