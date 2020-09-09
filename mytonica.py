@@ -30,7 +30,9 @@ def load_sounds(game):
 
 
 def load_sprites(game):
-    game.sprites = core.SpriteCollection.load_json_file("gfx/mytonica.spr")
+    game.sprites = core.SpriteCollection.load_json_file(
+        os.path.join(wd, "gfx", "mytonica.spr")
+    )
 
 
 def display_sprite_at(game, spr, row, column):
@@ -267,7 +269,7 @@ def tutorial(game):
 def goto_level(game, lvl_number):
     # We should try to see if a board is already loaded but... no time!!!!
     lvl = levels.Level(lvl_number)
-    lvl.board = game.load_board(lvl.map, lvl.number)
+    lvl.board = game.load_board(os.path.join(wd, lvl.map), lvl.number)
     for i in lvl.board.get_immovables(type="genetic_material"):
         p = i.pos
         lvl.board.clear_cell(p[0], p[1])
