@@ -1,6 +1,9 @@
 # Mytonica
 Mytonica is a game developed for the #olcCodeJam2020.
 
+
+![screenshot](https://img.itch.zone/aW1hZ2UvNzUxNjk1LzQxOTY0MzMucG5n/original/bbjIv%2B.png "Mytonica")
+
 ## Theme
 
 The theme for this code jam is "The great Machine".
